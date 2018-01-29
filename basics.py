@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import argparse
+import utils
 
 from standard_args import *
 
@@ -56,12 +57,12 @@ def makedir(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-def train_epoch(net,trainloader,optimizer,epoch=1,loss_fn=F.nll_loss,print_every=100,save_every=100,save_dir=DATA_DIR,cuda=True,verbose=1):
+def train_epoch(net,train_loader,optimizer,epoch=1,loss_fn=F.nll_loss,log_freq=100,save_freq=100,save_file=DATA_DIR,cuda=True,v=1):
     net.train()
     running_loss = 0.0
     start = time.time()
     startt = time.time()
-    for i, data in enumerate(trainloader, 1):
+    for i, data in enumerate(train_loader, 1):
         # get the inputs
         inputs, labels = data
         if cuda:
@@ -81,22 +82,22 @@ def train_epoch(net,trainloader,optimizer,epoch=1,loss_fn=F.nll_loss,print_every
         
         # print statistics
         running_loss += loss.data[0]
-        if print_every != 0 and i % print_every == 0:    # print every 100 mini-batches
+        if log_freq != 0 and i % log_freq == 0:    # print every 100 mini-batches
             endt = time.time()
             #print('Time: %f s' % (endt-startt))
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTime: {} s'.format(
-                epoch, i * len(inputs), len(trainloader.dataset),
-                100. * i / len(trainloader), loss.data[0],
-                endt-startt))
+            printv('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTime: {} s'.format(
+                epoch, i * len(inputs), len(train_loader.dataset),
+                100. * i / len(train_loader), loss.data[0],
+                endt-startt),v,1)
             #print('[%d, %5d] loss: %.3f' %
-            #      (epoch + 1, i, running_loss / print_every))
+            #      (epoch + 1, i, running_loss / log_freq))
             sys.stdout.flush()
             running_loss = 0.0
             startt = time.time()
-        if save_every !=0 and i % save_every == 0:
-            torch.save(net.state_dict(),save_dir)
+        if save_freq !=0 and i % save_freq == 0:
+            torch.save(net.state_dict(),save_file)
     end=time.time()
-    print('Epoch %d time: %f s' % (epoch,end-start))
+    printv('Epoch %d time: %f s' % (epoch,end-start),v,0)
     return net
 
 
@@ -105,26 +106,26 @@ def num_label_matches(outputs, labels):
     return pred.eq(labels.data.view_as(pred)).sum()
     #return (predicted == labels).sum()
 
-def train(net,trainloader,epochs=2,loss_fn=F.nll_loss,correct_fn=num_label_matches,optimizer=lambda param: optim.SGD(param, lr=0.01),print_every=100,save_every=100,save_dir=DATA_DIR,cuda=True,verbose=1):
+def train(net,train_loader,test_loader,epochs=2,loss_fn=F.nll_loss,correct_fn=num_label_matches,optimizer=lambda param: optim.SGD(param, lr=0.01),log_freq=100,save_freq=100,save_file=DATA_DIR,cuda=True,v=1):
     if cuda:
         net = net.cuda()
-    makedir(os.path.dirname(save_dir))
+    makedir(os.path.dirname(save_file))
     optimizer = optimizer(net.parameters())
     start = time.time()
     for epoch in range(1,epochs+1):  # loop over the dataset multiple times
-        net = train_epoch(net,trainloader,optimizer,epoch=epoch,loss_fn=loss_fn,print_every=print_every,save_every=save_every,save_dir=save_dir,cuda=cuda,verbose=verbose)
-        test(net,testloader,loss_fn=loss_fn,correct_fn=correct_fn,verbose=verbose)
+        net = train_epoch(net,train_loader,optimizer,epoch=epoch,loss_fn=loss_fn,log_freq=log_freq,save_freq=save_freq,save_file=save_file,cuda=cuda,v=v)
+        test(net,test_loader,loss_fn=loss_fn,correct_fn=correct_fn,v=v)
     end = time.time()
-    print('Total time: %f s' % (end-start))
+    printv('Total time: %f s' % (end-start),v,0)
     return net
 
 
-def test(net,testloader,loss_fn=F.nll_loss,correct_fn=num_label_matches,verbose=1):
+def test(net,test_loader,loss_fn=F.nll_loss,correct_fn=num_label_matches,v=1):
     net.eval()
     correct = 0
     #total = 0
     test_loss = 0
-    for data in testloader:
+    for data in test_loader:
         images, labels = data
         if args.cuda:
             images, labels = images.cuda(), labels.cuda()
@@ -134,11 +135,11 @@ def test(net,testloader,loss_fn=F.nll_loss,correct_fn=num_label_matches,verbose=
         test_loss += loss_fn(outputs, labels, size_average=False).data[0]
         #total += labels.size(0)
         correct += correct_fn(outputs.data, labels)
-    test_loss /= len(testloader.dataset)
-    accuracy = correct / len(testloader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
-        test_loss, correct, len(testloader.dataset),
-        100. * correct / len(testloader.dataset)))
+    test_loss /= len(test_loader.dataset)
+    accuracy = correct / len(test_loader.dataset)
+    printv('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+        test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)),v,0)
     return accuracy
 
 def load_mnist(data_dir=DATA_DIR,train_batch_size=32,test_batch_size=32,download=False,cuda=False):
@@ -150,35 +151,36 @@ def load_mnist(data_dir=DATA_DIR,train_batch_size=32,test_batch_size=32,download
     #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     trainset = MNIST(root=data_dir, train=True,
                      download=download, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=train_batch_size,
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=train_batch_size,
                                               shuffle=True, num_workers=2,**kwargs)
 
     testset = MNIST(root=data_dir, train=False,
                     download=download, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=test_batch_size,
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=test_batch_size,
                                              shuffle=False, num_workers=2,**kwargs)
-    return trainloader, testloader #, trainset, testset
+    return train_loader, test_loader #, trainset, testset
 
 if __name__=='__main__':
     parser = standard_parser()
     args = parser.parse_args()
     args = args_post_process(args)
 
-    trainloader, testloader = load_mnist(data_dir=args.data_dir, download=args.download, train_batch_size=args.batch_size, test_batch_size=args.test_batch_size,cuda=args.cuda)
-
-    save_file = os.path.join(args.save_dir,"mnist")
+    train_loader, test_loader = load_mnist(data_dir=args.data_dir, download=args.download, train_batch_size=args.batch_size, test_batch_size=args.test_batch_size,cuda=args.cuda)
+    save_file = args.save_file
+    #save_file = os.path.join(args.save_dir,"mnist")
     net = train(MNISTNet(),
-                trainloader,
+                train_loader,
+                test_loader,
                 epochs=args.epochs,
                 loss_fn=F.nll_loss,
                 correct_fn=num_label_matches,
                 optimizer = lambda param:optim.Adam(param, lr=1e-4),
                 #optimizer=lambda param: optim.SGD(param, lr=args.lr, momentum=args.momentum),
-                print_every=args.log_interval,
-                save_every=args.save_interval,
-                save_dir=save_file,
+                log_freq=args.log_freq,
+                save_freq=args.save_freq,
+                save_file=save_file,
                 cuda=args.cuda,
-                verbose=1)
+                v=args.v)
     torch.save(net.state_dict(), save_file)
 
 """

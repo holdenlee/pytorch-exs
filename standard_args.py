@@ -19,16 +19,18 @@ def standard_parser():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+    parser.add_argument('--log-freq', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--save-interval', type=int, default=0, metavar='N',
+    parser.add_argument('--save-freq', type=int, default=0, metavar='N',
                         help='how many batches to wait before saving')
     parser.add_argument('--data-dir', type=str, default="/n/fs/scratch/holdenl/data", metavar='DD',
                         help='data location')
-    parser.add_argument('--save-dir', type=str, default="/n/fs/scratch/holdenl/data/models", metavar='SD',
+    parser.add_argument('--save-file', type=str, default="/n/fs/scratch/holdenl/data/models/model", metavar='SD',
                         help='save location')
     parser.add_argument('--download', type=bool, default=True, metavar='DL',
                         help='whether to download dataset (set False for offline mode)')
+    parser.add_argument('-v', type=int, default=1, metavar='V',
+                        help='verbosity level')
     return parser
 
 def args_post_process(args):
